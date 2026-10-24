@@ -396,36 +396,201 @@ function mlFor(name) {
   }
   return lookup(name);
 }
-function parseList(text) {
-  const items = [], notes = [];
-  let n = 0;
-  for (const raw of String(text).split(/\r?\n/)) {
-    const line = raw.replace(/^\s*(?:[-*•·]|\d+[.)])\s*/, "").trim();
-    if (!line) continue;
-    const hasMl = ML_RE.test(line);
-    if (hasMl && line.length > 30) { notes.push(line); continue; }
-    let name = line, note = "", qty = "";
-    const m = line.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
-    if (m) {
-      name = m[1];
-      const inner = m[2].trim();
-      if (/^\d+$/.test(inner)) qty = inner; else note = inner;
-    }
-    name = name.replace(/\.\s*and\b/i, " and").replace(/[.,;:\s]+$/, "").trim();
-    if (!name) continue;
-    // "Mint and coriander leaves" -> two items, when both halves are known groceries
-    const parts = hasMl ? [] : name.split(/\s+(?:and|&|\+)\s+/i).map(s => s.trim()).filter(Boolean);
-    if (parts.length > 1 && parts.every(lookup)) {
-      for (const part of parts) {
-        const h = lookup(part), nm = part.charAt(0).toUpperCase() + part.slice(1);
-        items.push({ id: "i" + (n++), name: nm, note, qty, group: h.g, mln: h.ml, mlOnly: false });
+/* ---------- reading a list the way a person would ---------- */
+// Malayalam words the reader recognises: [spellings], English name, group, how it sounds in English letters
+const ML_WORDS = [
+  [["കോവയ്ക്ക", "കോവക്ക"], "Ivy gourd", "veg", "kovakka"],
+  [["വെണ്ടയ്ക്ക", "വെണ്ടക്ക"], "Okra", "veg", "vendakka"],
+  [["അച്ചിങ്ങ"], "Long beans", "veg", "achinga"],
+  [["ബീൻസ്"], "Beans", "veg", ""],
+  [["പാവയ്ക്ക", "പാവക്ക"], "Bitter gourd", "veg", "pavakka"],
+  [["മുരിങ്ങക്ക", "മുരിങ്ങയ്ക്ക", "മുരിങ്ങ"], "Drumstick", "veg", "muringakka"],
+  [["പടവലങ്ങ", "പടവലം"], "Snake gourd", "veg", "padavalanga"],
+  [["കുമ്പളങ്ങ"], "Ash gourd", "veg", "kumbalanga"],
+  [["മത്തങ്ങ"], "Pumpkin", "veg", "mathanga"],
+  [["വെള്ളരിക്ക", "വെള്ളരി"], "Cucumber", "veg", "vellarikka"],
+  [["വഴുതനങ്ങ", "വഴുതന"], "Brinjal", "veg", ""],
+  [["പച്ചക്കായ"], "Raw banana", "veg", "pachakkaya"],
+  [["ക്യാരറ്റ്", "കാരറ്റ്"], "Carrot", "veg", ""],
+  [["കാബേജ്"], "Cabbage", "veg", ""],
+  [["ബീറ്റ്റൂട്ട്"], "Beetroot", "veg", ""],
+  [["ചീര"], "Spinach", "veg", "cheera"],
+  [["തക്കാളി"], "Tomato", "veg", ""],
+  [["ചെറിയ ഉള്ളി", "ചുവന്നുള്ളി"], "Shallots", "veg", ""],
+  [["സവാള"], "Onion", "veg", ""],
+  [["ഉരുളക്കിഴങ്ങ്"], "Potato", "veg", ""],
+  [["ഇഞ്ചി"], "Ginger", "veg", ""],
+  [["വെളുത്തുള്ളി"], "Garlic", "veg", ""],
+  [["പച്ചമുളക്"], "Green chili", "veg", ""],
+  [["നാരങ്ങ"], "Lemon", "veg", ""],
+  [["തേങ്ങാപ്പാൽ"], "Coconut milk", "pantry", ""],
+  [["വെളിച്ചെണ്ണ"], "Coconut oil", "pantry", ""],
+  [["തേങ്ങ"], "Coconut", "veg", ""],
+  [["കറിവേപ്പില"], "Curry leaves", "herbs", ""],
+  [["പുതിന"], "Mint leaves", "herbs", ""],
+  [["മല്ലിയില"], "Coriander leaves", "herbs", ""],
+  [["ആപ്പിൾ"], "Apples", "fruit", ""],
+  [["ഓറഞ്ച്"], "Oranges", "fruit", ""],
+  [["മാമ്പഴം", "മാങ്ങ"], "Mango", "fruit", ""],
+  [["മുന്തിരി"], "Grapes", "fruit", ""],
+  [["തണ്ണിമത്തൻ"], "Watermelon", "fruit", ""],
+  [["പപ്പായ"], "Papaya", "fruit", ""],
+  [["നേന്ത്രപ്പഴം", "പഴം"], "Banana", "fruit", ""],
+  [["ചിക്കൻ", "കോഴി"], "Chicken", "meat", ""],
+  [["മത്തി"], "Sardines", "meat", "mathi"],
+  [["അയല"], "Mackerel", "meat", "ayala"],
+  [["ചെമ്മീൻ"], "Prawns", "meat", ""],
+  [["മീൻ"], "Fish", "meat", ""],
+  [["ബീഫ്"], "Beef", "meat", ""],
+  [["മട്ടൺ"], "Mutton", "meat", ""],
+  [["മുട്ട"], "Eggs", "meat", ""],
+  [["പാൽ"], "Milk", "dairy", ""],
+  [["തൈര്"], "Yogurt", "dairy", ""],
+  [["നെയ്യ്"], "Ghee", "dairy", ""],
+  [["ബ്രെഡ്"], "Bread", "dairy", ""],
+  [["ജീരകശാല"], "Jeerakashala rice", "pantry", ""],
+  [["അരി"], "Rice", "pantry", ""],
+  [["പഞ്ചസാര"], "Sugar", "pantry", ""],
+  [["ഉപ്പ്"], "Salt", "pantry", ""],
+  [["പരിപ്പ്"], "Dal", "pantry", "parippu"],
+  [["നുറുക്ക്"], "Nurukku", "snacks", ""],
+];
+// Old-style Malayalam (chillu written with a joiner) is turned into the modern letters before matching.
+function normMl(s) {
+  return String(s)
+    .replace(/ണ്‍/g, "ൺ").replace(/ന്‍/g, "ൻ")
+    .replace(/ര്‍/g, "ർ").replace(/ല്‍/g, "ൽ")
+    .replace(/ള്‍/g, "ൾ").replace(/[‌‍]/g, "");
+}
+const OFFER_RE = /ഓഫർ|ഓഫറ|ഓഫര|ഡിസ്കൗണ്ട|\boffers?\b|\bdiscount|\bsale\b|\bdeals?\b/i;
+const OFFER_RE_G = /ഓഫർ|ഓഫറ|ഓഫര|ഡിസ്കൗണ്ട|\boffers?\b|\bdiscount\w*|\bsale\b|\bdeals?\b/gi;
+const EXAMPLE_RE = /ഉദാഹരണ|പോലുള്ള|പോലെയുള്ള|മുതലായ|തുടങ്ങിയ|\be\.?g\b|for example|such as|\blike\b|\betc\b/i;
+const LITTLE_RE = /കുറച്ച|\blittle\b|\bsmall\b|\bfew\b/i;
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const makeItem = f => Object.assign({ note: "", qty: "", mln: "", mlOnly: false }, f);
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function lookup(name) {
+  const n = name.toLowerCase();
+  for (const [k, g, ml] of DICT) if (n.includes(k)) return { g, ml };
+  return null;
+}
+function mlFor(name) {
+  const parts = name.split(/\s*(?:\band\b|&|\+|,)\s*/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    const hits = parts.map(lookup);
+    if (hits.every(Boolean)) return { g: hits[0].g, ml: hits.map(h => h.ml).join(", ") };
+  }
+  return lookup(name);
+}
+function findMlItems(text) {
+  const t = normMl(text), found = [], taken = [];
+  for (const [spells, name, g, say] of ML_WORDS) {
+    for (const sp of spells) {
+      let from = 0, at;
+      while ((at = t.indexOf(sp, from)) !== -1) {
+        const end = at + sp.length;
+        if (!taken.some(([a, b]) => at < b && end > a)) {
+          taken.push([at, end]);
+          if (!found.some(f => f.name === name)) found.push({ at, name, g, ml: sp, say });
+        }
+        from = end;
       }
+    }
+  }
+  return found.sort((a, b) => a.at - b.at);
+}
+function findEnItems(text) {
+  const t = text.toLowerCase(), found = [];
+  for (const [k, g, ml] of DICT) {
+    const m = t.match(new RegExp("\\b" + escRe(k) + "[a-z]*\\b"));
+    if (m && !found.some(f => m.index < f.at + f.len && m.index + m[0].length > f.at)) found.push({ at: m.index, len: m[0].length, name: cap(m[0]), g, ml });
+  }
+  return found.sort((a, b) => a.at - b.at);
+}
+function categoryOf(text) {
+  if (/പച്ചക്കറി|vegetable|\bveg\b/i.test(text)) return "veg";
+  if (/പഴ|fruit/i.test(text)) return "fruit";
+  return "";
+}
+// "Any other vegetables on offer" — what a person adds when the sender only gave examples
+function otherOnOffer(cat, other) {
+  const en = cat === "veg" ? "vegetables" : cat === "fruit" ? "fruit" : "items";
+  const ml = cat === "veg" ? "പച്ചക്കറികൾ" : cat === "fruit" ? "പഴങ്ങൾ" : "സാധനങ്ങൾ";
+  return makeItem({
+    name: other ? `Any other ${en} on offer` : cap(`${en} on offer`),
+    group: "offer", mln: other ? `ഓഫറുള്ള മറ്റു ${ml}` : `ഓഫറുള്ള ${ml}`, generic: true,
+  });
+}
+// One "only if on offer" sentence -> the items it names, plus "any other … on offer" when they were only examples
+function offerFromSentence(text) {
+  const t = normMl(text), items = [];
+  for (const f of ML_RE.test(t) ? findMlItems(t) : []) items.push(makeItem({ name: f.name, note: f.say, noteIsName: !!f.say, group: "offer", mln: f.ml }));
+  for (const f of findEnItems(t.replace(OFFER_RE_G, " "))) {
+    if (!items.some(i => i.name.toLowerCase() === f.name.toLowerCase())) items.push(makeItem({ name: f.name, group: "offer", mln: f.ml }));
+  }
+  if (!items.length || EXAMPLE_RE.test(t)) items.push(otherOnOffer(categoryOf(t), items.length > 0));
+  return { items, little: LITTLE_RE.test(t) };
+}
+function parseItemLine(line) {
+  const hasMl = ML_RE.test(line);
+  let name = line, note = "", qty = "";
+  const m = line.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  if (m) { name = m[1]; const inner = m[2].trim(); if (/^\d+$/.test(inner)) qty = inner; else note = inner; }
+  name = name.replace(/\.\s*and\b/i, " and").replace(/[.,;:\s]+$/, "").trim();
+  if (!name) return [];
+  if (hasMl) {
+    const f = findMlItems(name);
+    if (f.length === 1) return [makeItem({ name: f[0].name, note: note || f[0].say, noteIsName: !note && !!f[0].say, qty, group: f[0].g, mln: name })];
+    if (f.length > 1 && name.length <= 40) return f.map(x => makeItem({ name: x.name, note: x.say, noteIsName: !!x.say, group: x.g, mln: x.ml }));
+    return [makeItem({ name, note, qty, group: "other", mln: name, mlOnly: true })];
+  }
+  // "Fruits (apple and orange)" -> Apples, Oranges
+  if (note && /^(fruits?|snacks?|vegetables?|veg|veggies)$/i.test(name)) {
+    const inner = note.split(/\s*(?:\band\b|&|\+|,)\s*/i).map(x => x.trim()).filter(Boolean);
+    if (inner.length && inner.every(lookup)) return inner.map(p => { const h = lookup(p); return makeItem({ name: cap(p), qty, group: h.g, mln: h.ml }); });
+  }
+  // "Mint and coriander leaves" -> two items, when both halves are known groceries
+  const parts = name.split(/\s+(?:and|&|\+)\s+/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1 && parts.every(lookup)) return parts.map(p => { const h = lookup(p); return makeItem({ name: cap(p), note, qty, group: h.g, mln: h.ml }); });
+  const hit = mlFor(name);
+  return [makeItem({ name, note, qty, group: hit ? hit.g : "other", mln: hit ? hit.ml : "" })];
+}
+function parseList(text) {
+  // put wrapped Malayalam sentences back together
+  const lines = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = normMl(raw).replace(/^\s*(?:[-*•·]|\d+[.)])\s*/, "").trim();
+    const prev = lines[lines.length - 1];
+    if (line && prev && ML_RE.test(line) && ML_RE.test(prev) && prev.length > 25 && !/[.!?:]$/.test(prev)) { lines[lines.length - 1] = prev + " " + line; continue; }
+    lines.push(line);
+  }
+  const items = [], notes = [], offerItems = [], offerNotes = [];
+  let little = false, offerBlock = false;
+  for (const line of lines) {
+    if (!line) { offerBlock = false; continue; }
+    if (OFFER_RE.test(line)) {
+      const o = offerFromSentence(line);
+      little = little || o.little;
+      // "Only if on offer:" is a heading: the items follow on the next lines
+      const heading = /:\s*$/.test(line) || (o.items.length === 1 && o.items[0].generic && line.length <= 25);
+      offerNotes.push(line.replace(/:\s*$/, ""));
+      if (heading) { offerBlock = true; continue; }
+      offerItems.push(...o.items);
       continue;
     }
-    const hit = hasMl ? null : mlFor(name);
-    items.push({ id: "i" + (n++), name, note, qty, group: hit ? hit.g : "other", mln: hasMl ? name : (hit ? hit.ml : ""), mlOnly: hasMl });
+    if (ML_RE.test(line) && line.length > 40 && findMlItems(line).length !== 1) { notes.push(line); offerBlock = false; continue; }
+    if (/:\s*$/.test(line)) { offerBlock = false; continue; }
+    const parsed = parseItemLine(line);
+    if (offerBlock) parsed.forEach(i => { i.group = "offer"; offerItems.push(i); });
+    else items.push(...parsed);
   }
-  return { items, notes };
+  // something already on the main list isn't repeated under "on offer"
+  const onMain = new Set(items.map(i => i.name.toLowerCase()));
+  const offer = offerItems.filter((i, k, a) => !onMain.has(i.name.toLowerCase()) && a.findIndex(j => j.name === i.name) === k);
+  if (!offer.length && offerNotes.length) offer.push(otherOnOffer(categoryOf(offerNotes.join(" ")), false));
+  const all = items.concat(offer).map((i, k) => Object.assign(i, { id: "i" + k }));
+  return { items: all, notes, offerNote: offerNotes.join(" "), offerLittle: little };
 }
 
 const DEFAULT_TEXT = `Chicken
@@ -451,21 +616,12 @@ Apples
 Oranges
 Mango (1)
 Nurukku
-Potato chips`;
+Potato chips
+പച്ചക്കറികൾ ഓഫർ ഉണ്ടെങ്കിൽ അതുമാത്രം കുറച്ച് വീതം എടുക്കുക ഉദാഹരണത്തിന് കോവയ്ക്ക വെണ്ടക്ക ബീൻസ് അച്ചിങ്ങ പോലുള്ള സാധനങ്ങൾ`;
 
 function defaultList() {
   const p = parseList(DEFAULT_TEXT);
-  const offer = [
-    ["Ivy gourd", "kovakka", "കോവയ്ക്ക"], ["Okra", "vendakka", "വെണ്ടക്ക"],
-    ["Beans", "", "ബീൻസ്"], ["Long beans", "achinga", "അച്ചിങ്ങ"],
-  ].map(([name, note, mln], i) => ({ id: "o" + i, name, note, qty: "", group: "offer", mln, mlOnly: false, noteIsName: true }));
-  return {
-    id: "sima-2026-10-24",
-    source: "From Sima · Sat 24 Oct",
-    items: p.items.concat(offer),
-    notes: [],
-    offerNote: "പച്ചക്കറികൾ ഓഫർ ഉണ്ടെങ്കിൽ അതുമാത്രം കുറച്ച് വീതം എടുക്കുക",
-  };
+  return { id: "sima-2026-10-24", source: "From Sima · Sat 24 Oct", items: p.items, notes: p.notes, offerNote: p.offerNote, offerLittle: p.offerLittle };
 }
 
 /* ================= storage ================= */
@@ -538,6 +694,7 @@ const STR = {
     left: n => n ? `${n} ബാക്കി` : "കഴിഞ്ഞു", emptyList: "ലിസ്റ്റിൽ ഒന്നുമില്ല. \"പുതിയ ലിസ്റ്റ്\" അമർത്തി ചേർക്കുക.",
     undo: "Undo", fromPhoto: "ഫോട്ടോയിൽ നിന്ന്", fromPdf: "PDF-ൽ നിന്ന്", pasted: "Paste ചെയ്തത്",
     offerCallout: "ഓഫർ ഉണ്ടെങ്കിൽ മാത്രം, കുറച്ച് വീതം വാങ്ങുക.",
+    offerCalloutPlain: "ഓഫർ ഉണ്ടെങ്കിൽ മാത്രം വാങ്ങുക.",
   },
   en: {
     touch: "Touch", head: "Headphones", newList: "New list",
@@ -584,6 +741,7 @@ const STR = {
     left: n => n ? `${n} left` : "Done", emptyList: "Nothing on the list. Tap \"New list\" to add one.",
     undo: "Undo", fromPhoto: "From photo", fromPdf: "From PDF", pasted: "Pasted",
     offerCallout: "Buy these only if they're on offer, and just a little of each.",
+    offerCalloutPlain: "Buy these only if they're on offer.",
   },
 };
 const T = () => STR[lang];
@@ -665,8 +823,9 @@ function speakCurrent(withSection) {
   if (!it) { lastGroup = null; speakParts([{ text: STR[L].allDone, l: L }]); return; }
   const parts = [];
   if (withSection || it.group !== lastGroup) parts.push({ text: groupName(it.group, L), l: L });
+  const reminder = (it.group === "offer" && !parts.length && !it.generic) ? [{ text: L === "ml" ? "ഓഫർ ഉണ്ടെങ്കിൽ മാത്രം" : "only if on offer", l: L }] : [];
   lastGroup = it.group;
-  speakParts(parts.concat(itemParts(it, L)));
+  speakParts(parts.concat(itemParts(it, L), reminder));
 }
 function speakSection() {
   const it = currentItem(); if (!it) { speakCurrent(); return; }
@@ -859,14 +1018,14 @@ getSample();
 const AI_PROMPT = `You turn a shopping list into JSON for a grocery checklist app used by a Malayali family in Bahrain.
 The input is a photo (often a WhatsApp screenshot or a handwritten note) or text. Ignore everything that is not part of the shopping list: times, names, app buttons, links, status bar, unrelated earlier messages.
 Reply with only this JSON:
-{"items":[{"name":"","note":"","qty":"","group":"","ml":""}],"offer":{"note":"","items":[]},"notes":[]}
+{"items":[{"name":"","note":"","qty":"","group":"","ml":""}],"offer":{"note":"","little":false,"items":[]},"notes":[]}
 - name: the item in plain English, as the sender meant it (e.g. "Jeerakashala rice", "Curry leaves").
 - note: brand, store or detail the sender gave (e.g. "Almarai low fat", "Lulu", "loose"); else "".
 - qty: amount if given (e.g. "3", "1 kg"); else "".
 - group: one of meat (meat, fish, eggs), dairy (milk, yogurt, cheese, bread), pantry (rice, flour, oil, spices, vinegar, packets), veg (vegetables, coconut), herbs (curry leaves, mint, coriander leaves), fruit, snacks, other.
 - ml: the item's everyday Kerala name in Malayalam script (e.g. Onion -> "സവാള", Shallots -> "ചെറിയ ഉള്ളി").
 - One entry per thing to buy: split "Mint and coriander leaves" into two items, "Fruits (apple and orange)" into Apples and Oranges.
-- If the sender says some items should be bought only if on offer, put those items in offer.items (same fields, any group) and the sender's original sentence in offer.note.
+- If the sender says some items should be bought only if on offer, put those items in offer.items (same fields, any group) and the sender's original sentence in offer.note. If the items are only examples ("like", "e.g.", "പോലുള്ള", "ഉദാഹരണത്തിന്"), list each example and add one more item: {"name":"Any other vegetables on offer","ml":"ഓഫറുള്ള മറ്റു പച്ചക്കറികൾ"} (say fruit or items instead of vegetables when that is what the sender meant). If no items are named, add just {"name":"Vegetables on offer","ml":"ഓഫറുള്ള പച്ചക്കറികൾ"} (or fruit / items). Set offer.little to true when the sender says to take only a little of each.
 - Other instructions from the sender go in notes, in the sender's original words. Items written in Malayalam still get an English name.
 Example item: {"name":"Spinach","note":"","qty":"3","group":"veg","ml":"ചീര"}`;
 
@@ -898,7 +1057,9 @@ function cleanAI(d) {
   const offerItems = (Array.isArray(d && d.offer && d.offer.items) ? d.offer.items : []).map(x => clean(x, "offer")).filter(Boolean);
   const notes = (Array.isArray(d && d.notes) ? d.notes : []).map(s => String(s).trim()).filter(Boolean).slice(0, 5);
   if (!items.length && !offerItems.length) throw { code: "no_items" };
-  return { items: items.concat(offerItems), notes, offerNote: offerItems.length ? String((d.offer && d.offer.note) || "").trim() : "" };
+  const offerNote = offerItems.length ? String((d.offer && d.offer.note) || "").trim() : "";
+  const offerLittle = !!(d.offer && d.offer.little) || LITTLE_RE.test(offerNote);
+  return { items: items.concat(offerItems), notes, offerNote, offerLittle };
 }
 async function toAccepted(blob, types, maxBytes) {
   if (types.includes(blob.type) && blob.size <= maxBytes) return blob;
@@ -944,7 +1105,7 @@ async function ocrImages(blobs) {
   finally { try { await worker.terminate(); } catch (e) {} }
   const p = parseList(cleanOcr(text));
   if (!p.items.length) throw { code: "no_items" };
-  return { items: p.items, notes: p.notes, offerNote: "", needsCheck: true };
+  return { items: p.items, notes: p.notes, offerNote: p.offerNote, offerLittle: p.offerLittle, needsCheck: true };
 }
 async function renderPdfPage(pdf, n) {
   const page = await pdf.getPage(n);
@@ -972,7 +1133,7 @@ async function importPdf(file) {
     if (sample) return await aiFromText(sample, text);
     const p = parseList(text);
     if (!p.items.length) throw { code: "no_items" };
-    return { items: p.items, notes: p.notes, offerNote: "" };
+    return { items: p.items, notes: p.notes, offerNote: p.offerNote, offerLittle: p.offerLittle };
   }
   const imgs = [];
   for (let p = 1; p <= Math.min(pages, 3); p++) imgs.push(await renderPdfPage(pdf, p));
@@ -1018,7 +1179,7 @@ function applyNewList(r, how) {
     id: "p" + d.getTime(),
     source: `${how} · ${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`,
     items: r.items.map((x, i) => ({ ...x, id: "i" + i })),
-    notes: r.notes || [], offerNote: r.offerNote || "",
+    notes: r.notes || [], offerNote: r.offerNote || "", offerLittle: r.offerLittle !== false,
   };
   store(LIST_KEY, LIST);
   picked = []; skipped = []; lastGroup = null; index(); savePicked();
@@ -1125,7 +1286,7 @@ function render() {
     if (!left.length) return "";
     const callout = g === "offer" ? `
       <div class="callout">
-        <p>${esc(t.offerCallout)}</p>
+        <p>${esc(LIST.offerLittle === false ? t.offerCalloutPlain : t.offerCallout)}</p>
         ${LIST.offerNote ? `<p class="orig"${ML_RE.test(LIST.offerNote) ? ' lang="ml"' : ""}>${esc(LIST.offerNote)}</p>` : ""}
       </div>` : "";
     return `<section class="${g === "offer" ? "offer" : ""}">
@@ -1226,7 +1387,7 @@ $("makeBtn").addEventListener("click", () => {
   $("importErr").hidden = true;
   const p = parseList($("newText").value);
   if (!p.items.length) { showImportError("empty_text"); return; }
-  applyNewList({ items: p.items, notes: p.notes, offerNote: "" }, T().pasted);
+  applyNewList({ items: p.items, notes: p.notes, offerNote: p.offerNote, offerLittle: p.offerLittle }, T().pasted);
 });
 
 render();
