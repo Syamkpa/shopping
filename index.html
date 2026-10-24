@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sima's Grocery List</title>
+<meta name="theme-color" content="#2f6b45">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=Noto+Sans+Malayalam:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column. Top: progress, Touch/Headphones switch, "New list". Headphone mode adds the listening panel. Below: aisle-grouped rows that vanish when tapped. */
+:root {
+  --bg: #f3f6f2;
+  --surface: #ffffff;
+  --fg: #1c2a21;
+  --muted: #5d6c62;
+  --line: #dbe3dc;
+  --accent: #2f6b45;
+  --on-accent: #ffffff;
+  --accent-soft: #e2efe5;
+  --offer: #9a6608;
+  --offer-soft: #fbf1db;
+  --alert: #b3372b;
+  --toast-bg: #1c2a21;
+  --toast-fg: #f3f6f2;
+  --font-display: "Bricolage Grotesque", "Noto Sans Malayalam", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Noto Sans Malayalam", "Segoe UI", system-ui, sans-serif;
+  --font-ml: "Noto Sans Malayalam", "Kartika", sans-serif;
+  --pocket-bg: #000000; --pocket-fg: #5f6b63; --pocket-item: #8fa596; --pocket-track: #1d2420; --pocket-warn: #b08a3e;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121a15; --surface: #1a251e; --fg: #e6eee8; --muted: #9bab9f; --line: #2b3a30;
+    --accent: #7cc796; --on-accent: #0f2617; --accent-soft: #1f3528; --offer: #e8b552; --offer-soft: #2f2716;
+    --alert: #f08a7e; --toast-bg: #e6eee8; --toast-fg: #121a15;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121a15; --surface: #1a251e; --fg: #e6eee8; --muted: #9bab9f; --line: #2b3a30;
+  --accent: #7cc796; --on-accent: #0f2617; --accent-soft: #1f3528; --offer: #e8b552; --offer-soft: #2f2716;
+  --alert: #f08a7e; --toast-bg: #e6eee8; --toast-fg: #121a15;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.4;
+}
+button, textarea { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, textarea:focus-visible, .upload:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 110px;
+}
+header { padding-block: 16px 14px; border-bottom: 1px solid var(--line); }
+.head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; letter-spacing: -0.01em; line-height: 1.1; margin: 0; }
+.left { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.sub { margin: 4px 0 10px; color: var(--muted); font-size: 0.9rem; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+
+.ico { width: 20px; height: 20px; flex: none; }
+.ico path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Mode switch */
+.modebar { margin-top: 12px; display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.modes { flex: 1 1 240px; display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px; min-width: 0; }
+.modes button {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px; border: 0; border-radius: 9px; background: none; cursor: pointer;
+  font-weight: 700; font-size: 0.98rem; color: var(--muted);
+}
+.modes button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.newbtn {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 48px; padding: 0 14px; border-radius: 12px; cursor: pointer;
+  border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.95rem;
+}
+.touchnote { margin: 10px 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+
+/* Listening panel */
+.voice { margin-top: 12px; display: grid; gap: 8px; }
+.now { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; min-width: 0; }
+.now-sec { font-family: var(--font-display); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.now-sec.is-offer { color: var(--offer); }
+.now-item { display: block; font-family: var(--font-display); font-weight: 700; font-size: 1.55rem; line-height: 1.25; margin-top: 2px; overflow-wrap: anywhere; }
+.now-en { display: block; color: var(--muted); font-size: 0.9rem; }
+.status { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.92rem; color: var(--muted); min-width: 0; }
+.status .lamp { width: 12px; height: 12px; border-radius: 50%; background: var(--line); flex: none; }
+.status.ready { color: var(--accent); }
+.status.ready .lamp { background: var(--accent); }
+.status.speaking { color: var(--offer); }
+.status.speaking .lamp { background: var(--offer); animation: pulse 1.2s ease-in-out infinite; }
+.status.off { color: var(--alert); }
+.status.off .lamp { background: var(--alert); }
+@keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+.press { margin: 0; font-size: 0.88rem; color: var(--accent); font-weight: 700; min-height: 1.2em; }
+.got { min-height: 64px; border: 0; border-radius: 12px; cursor: pointer; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 1.3rem; }
+.got:active { filter: brightness(0.92); }
+.ctrl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ctrl button { min-height: 48px; padding: 6px 8px; border-radius: 10px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 0.88rem; line-height: 1.2; }
+.ctrl button:active { background: var(--accent-soft); }
+.got:disabled, .ctrl button:disabled { opacity: .45; cursor: default; }
+.clicks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.click { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.click .n { display: flex; gap: 4px; margin-bottom: 4px; }
+.click .n i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: block; }
+.click b { display: block; font-size: 0.85rem; line-height: 1.25; }
+.vfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 6px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.vnote { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.vnote.warn { color: var(--offer); }
+
+/* New list panel */
+.newlist { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.newlist h3 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; }
+.newlist p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+.upload {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 58px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
+  background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 1.02rem; text-align: center;
+}
+.upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.upload.busy { opacity: .55; pointer-events: none; }
+.or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.85rem; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.newlist textarea { width: 100%; min-height: 160px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); font-size: 0.95rem; line-height: 1.5; }
+.importing { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }
+.importing span { font-weight: 700; color: var(--accent); font-size: 0.92rem; min-width: 0; }
+.importing span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1.2s ease-in-out infinite; }
+.err { color: var(--alert); font-weight: 700; font-size: 0.92rem; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { font-size: 0.88rem; font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); }
+.pill.warn { border-color: var(--offer); color: var(--offer); }
+.pill.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* List */
+.notes { margin-top: 18px; background: var(--offer-soft); border-radius: 12px; padding: 12px 14px; font-size: 0.92rem; line-height: 1.6; }
+.notes p { margin: 0; }
+.notes p + p { margin-top: 6px; }
+section { margin-top: 22px; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 0 0 8px; }
+ul { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+li + li { border-top: 1px solid var(--line); }
+li { transition: opacity .2s ease, transform .2s ease; }
+li.leaving { opacity: 0; transform: translateX(40px); }
+li.current .item { background: var(--accent-soft); }
+li.current .dot { border-color: var(--accent); background: var(--accent); }
+.item { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px; min-height: 54px; text-align: left; background: none; border: 0; cursor: pointer; }
+.item:active { background: var(--accent-soft); }
+.item:focus-visible { outline-offset: -2px; }
+.dot { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--muted); }
+.label { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.name { font-weight: 700; }
+.note { color: var(--muted); font-size: 0.88rem; }
+.qty { flex: none; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.85rem; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px; }
+.offer h2 { color: var(--offer); }
+.offer .callout { background: var(--offer-soft); border: 1px solid var(--line); border-bottom: 0; border-radius: 12px 12px 0 0; padding: 12px 14px; }
+.offer .callout p { margin: 0; font-size: 0.95rem; }
+.offer .callout .orig { margin-top: 6px; font-family: var(--font-ml); font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+.offer ul { border-radius: 0 0 12px 12px; }
+.offer .dot { border-color: var(--offer); }
+.done-msg { margin-top: 28px; padding: 22px 16px; text-align: center; background: var(--accent-soft); border-radius: 12px; color: var(--accent); font-weight: 700; font-size: 1.05rem; }
+.empty { margin-top: 28px; padding: 22px 16px; text-align: center; color: var(--muted); }
+
+.picked { margin-top: 30px; }
+.picked summary { cursor: pointer; color: var(--muted); font-weight: 700; font-size: 0.92rem; padding: 10px 0; list-style: none; }
+.picked summary::-webkit-details-marker { display: none; }
+.picked summary::before { content: "▸ "; }
+.picked[open] summary::before { content: "▾ "; }
+.picked .hint { margin: 0 0 8px; color: var(--muted); font-size: 0.85rem; }
+.picked ul { background: transparent; }
+.picked .item { color: var(--muted); }
+.picked .name { text-decoration: line-through; font-weight: 400; }
+.picked .back { flex: none; font-size: 0.82rem; font-weight: 700; color: var(--accent); }
+.tools { margin-top: 24px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.toast {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+.toast-inner { max-width: 528px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--toast-bg); color: var(--toast-fg); padding: 12px 12px 12px 16px; border-radius: 12px; box-shadow: 0 6px 20px rgb(0 0 0 / .18); pointer-events: auto; }
+.toast-inner span { min-width: 0; overflow-wrap: anywhere; }
+.toast button { flex: none; font-weight: 700; font-size: 0.92rem; padding: 6px 12px; border-radius: 8px; cursor: pointer; background: transparent; color: var(--toast-fg); border: 1px solid currentColor; }
+
+/* Pocket mode: a black, touch-proof screen that stays on so the headphone buttons and reading keep working */
+.pocket {
+  position: fixed; inset: 0; z-index: 50; background: var(--pocket-bg); color: var(--pocket-fg);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.pocket-inner { display: grid; gap: 14px; justify-items: center; max-width: 420px; }
+.pocket p { margin: 0; }
+.pk-title { font-size: 0.9rem; font-weight: 700; }
+.pk-item { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; color: var(--pocket-item); overflow-wrap: anywhere; }
+.pk-hint { font-size: 0.85rem; line-height: 1.5; }
+.pk-warn { font-size: 0.85rem; line-height: 1.5; color: var(--pocket-warn); }
+.pk-hold { width: 160px; height: 4px; border-radius: 2px; background: var(--pocket-track); overflow: hidden; }
+.pk-hold span { display: block; height: 100%; width: 0; background: var(--pocket-item); }
+.pocketbtn { font-size: 0.85rem; font-weight: 700; padding: 6px 14px; border-radius: 999px; cursor: pointer; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="head-row">
+      <h1>Grocery list</h1>
+      <span class="left" id="left"></span>
+    </div>
+    <p class="sub" id="sub"></p>
+    <div class="bar" aria-hidden="true"><span id="bar"></span></div>
+
+    <div class="modebar">
+      <div class="modes" role="group" aria-label="How to shop">
+        <button type="button" id="modeTouch" aria-pressed="true">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v6"/><path d="M12 10.5V9a1.5 1.5 0 0 1 3 0v2.5"/><path d="M15 11a1.5 1.5 0 0 1 3 0v3a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3.3 15a1.5 1.5 0 0 1 2.4-1.8L9 16"/></svg>
+          <span id="modeTouchLabel"></span>
+        </button>
+        <button type="button" id="modeHead" aria-pressed="false">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5a1 1 0 0 1-1-1v-4zM20 15h-3v5h2a1 1 0 0 0 1-1v-4z"/></svg>
+          <span id="modeHeadLabel"></span>
+        </button>
+      </div>
+      <button type="button" class="newbtn" id="newBtn">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span id="newBtnLabel"></span>
+      </button>
+    </div>
+    <p class="touchnote" id="touchNote"></p>
+
+    <div class="voice" id="voiceOn" hidden>
+      <div class="now" aria-live="polite">
+        <span class="now-sec" id="nowSec"></span>
+        <span class="now-item" id="nowItem"></span>
+        <span class="now-en" id="nowEn"></span>
+      </div>
+      <span class="status" id="status"><span class="lamp"></span><span id="statusText"></span></span>
+      <p class="press" id="press" aria-live="polite"></p>
+      <button type="button" class="got" id="gotBtn"></button>
+      <div class="ctrl">
+        <button type="button" id="repeatBtn"></button>
+        <button type="button" id="skipBtn"></button>
+        <button type="button" id="sectionBtn"></button>
+      </div>
+      <div class="clicks" id="clicksOn"></div>
+      <div class="vfoot">
+        <div class="seg" role="group" aria-label="Voice language">
+          <button type="button" id="langMl" data-lang="ml">മലയാളം</button>
+          <button type="button" id="langEn" data-lang="en">English</button>
+        </div>
+        <button type="button" class="pocketbtn" id="pocketBtn"></button>
+      </div>
+      <p class="vnote" id="onNote"></p>
+    </div>
+  </header>
+
+  <div class="newlist" id="newPanel" hidden>
+    <h3 id="npTitle"></h3>
+    <p id="npDesc"></p>
+    <label class="upload" id="uploadLabel">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M12 10.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/></svg>
+      <span id="uploadText"></span>
+      <input type="file" id="fileInput" accept="image/*,application/pdf,.pdf" multiple>
+    </label>
+    <div class="importing" id="importing" hidden>
+      <span id="importText"></span>
+      <button type="button" class="pill" id="importStop"></button>
+    </div>
+    <p class="err" id="importErr" hidden></p>
+    <div class="or" id="npOr"></div>
+    <textarea id="newText" placeholder="Chicken&#10;Onion&#10;Spinach (3)&#10;Milk (Almarai low fat)"></textarea>
+    <div class="row">
+      <button type="button" class="pill primary" id="makeBtn"></button>
+      <button type="button" class="pill" id="cancelBtn"></button>
+    </div>
+  </div>
+
+  <div class="notes" id="notes" hidden></div>
+  <main id="list"></main>
+  <p class="done-msg" id="doneMsg" hidden></p>
+
+  <details class="picked" id="picked" hidden>
+    <summary id="pickedSum"></summary>
+    <p class="hint" id="pickedHint"></p>
+    <ul id="pickedList"></ul>
+  </details>
+
+  <div class="tools">
+    <button type="button" class="pill" id="resetBtn"></button>
+    <button type="button" class="pill" id="prevBtn" hidden></button>
+  </div>
+</div>
+
+<div class="pocket" id="pocket" hidden>
+  <div class="pocket-inner">
+    <p class="pk-title" id="pkTitle"></p>
+    <p class="pk-item" id="pkItem"></p>
+    <p class="pk-hint" id="pkHint"></p>
+    <p class="pk-warn" id="pkWarn" hidden></p>
+    <div class="pk-hold" aria-hidden="true"><span id="pkBar"></span></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden>
+  <div class="toast-inner" role="status">
+    <span id="toastText"></span>
+    <button type="button" id="undoBtn">Undo</button>
+  </div>
+</div>
+
+<script>
+/* ================= data ================= */
+const GROUP_ORDER = ["meat", "dairy", "pantry", "veg", "herbs", "fruit", "snacks", "other", "offer"];
+const GROUP_META = {
+  meat:   { en: "Meat, fish & eggs", ml: "ഇറച്ചി, മീൻ, മുട്ട" },
+  dairy:  { en: "Dairy & bread", ml: "പാലും ബ്രെഡും" },
+  pantry: { en: "Rice & pantry", ml: "അരിയും മറ്റു സാധനങ്ങളും" },
+  veg:    { en: "Vegetables", ml: "പച്ചക്കറി" },
+  herbs:  { en: "Herbs", ml: "ഇലകൾ" },
+  fruit:  { en: "Fruit", ml: "പഴങ്ങൾ" },
+  snacks: { en: "Snacks", ml: "സ്നാക്സ്" },
+  other:  { en: "Other", ml: "മറ്റുള്ളവ" },
+  offer:  { en: "Only if on offer", enSay: "Only if on offer, a little of each", ml: "ഓഫർ ഉണ്ടെങ്കിൽ മാത്രം", mlSay: "ഓഫർ ഉണ്ടെങ്കിൽ മാത്രം, കുറച്ച് വീതം" },
+};
+
+// keyword -> [group, Malayalam name]. Specific phrases first.
+const DICT = [
+  ["eggplant", "veg", "വഴുതനങ്ങ"], ["potato chips", "snacks", "പൊട്ടറ്റോ ചിപ്സ്"],
+  ["coconut oil", "pantry", "വെളിച്ചെണ്ണ"], ["coconut milk", "pantry", "തേങ്ങാപ്പാൽ"],
+  ["chili powder", "pantry", "മുളകുപൊടി"], ["chilli powder", "pantry", "മുളകുപൊടി"],
+  ["coriander powder", "pantry", "മല്ലിപ്പൊടി"], ["turmeric", "pantry", "മഞ്ഞൾപ്പൊടി"],
+  ["curry lea", "herbs", "കറിവേപ്പില"], ["curryleaf", "herbs", "കറിവേപ്പില"],
+  ["coriander", "herbs", "മല്ലിയില"], ["mint", "herbs", "പുതിനയില"],
+  ["jeerakashala", "pantry", "ജീരകശാല അരി"], ["jeerakasala", "pantry", "ജീരകശാല അരി"],
+  ["matta", "pantry", "മട്ട അരി"], ["basmati", "pantry", "ബസ്മതി അരി"], ["rice", "pantry", "അരി"],
+  ["vinegar", "pantry", "വിനാഗിരി"], ["sugar", "pantry", "പഞ്ചസാര"], ["salt", "pantry", "ഉപ്പ്"],
+  ["atta", "pantry", "ആട്ട"], ["maida", "pantry", "മൈദ"], ["rava", "pantry", "റവ"],
+  ["parippu", "pantry", "പരിപ്പ്"], ["dal", "pantry", "പരിപ്പ്"], ["coffee", "pantry", "കാപ്പിപ്പൊടി"],
+  ["tea", "pantry", "ചായപ്പൊടി"], ["oil", "pantry", "എണ്ണ"],
+  ["chicken", "meat", "ചിക്കൻ"], ["mutton", "meat", "മട്ടൺ"], ["beef", "meat", "ബീഫ്"],
+  ["sardine", "meat", "മത്തി"], ["mathi", "meat", "മത്തി"], ["mackerel", "meat", "അയല"], ["ayala", "meat", "അയല"],
+  ["prawn", "meat", "ചെമ്മീൻ"], ["shrimp", "meat", "ചെമ്മീൻ"], ["fish", "meat", "മീൻ"], ["egg", "meat", "മുട്ട"],
+  ["milk", "dairy", "പാൽ"], ["yogurt", "dairy", "തൈര്"], ["yoghurt", "dairy", "തൈര്"], ["curd", "dairy", "തൈര്"],
+  ["laban", "dairy", "ലബൻ"], ["butter", "dairy", "ബട്ടർ"], ["cheese", "dairy", "ചീസ്"], ["ghee", "dairy", "നെയ്യ്"],
+  ["bread", "dairy", "ബ്രെഡ്"],
+  ["shallot", "veg", "ചെറിയ ഉള്ളി"], ["small onion", "veg", "ചെറിയ ഉള്ളി"], ["onion", "veg", "സവാള"],
+  ["tomato", "veg", "തക്കാളി"], ["potato", "veg", "ഉരുളക്കിഴങ്ങ്"], ["ginger", "veg", "ഇഞ്ചി"],
+  ["garlic", "veg", "വെളുത്തുള്ളി"], ["chil", "veg", "പച്ചമുളക്"], ["brinjal", "veg", "വഴുതനങ്ങ"],
+  ["spinach", "veg", "ചീര"], ["coconut", "veg", "തേങ്ങ"], ["carrot", "veg", "ക്യാരറ്റ്"],
+  ["long bean", "veg", "അച്ചിങ്ങ"], ["achinga", "veg", "അച്ചിങ്ങ"], ["bean", "veg", "ബീൻസ്"],
+  ["okra", "veg", "വെണ്ടക്ക"], ["vendakka", "veg", "വെണ്ടക്ക"], ["ladies finger", "veg", "വെണ്ടക്ക"],
+  ["ivy gourd", "veg", "കോവയ്ക്ക"], ["kovakka", "veg", "കോവയ്ക്ക"], ["cabbage", "veg", "കാബേജ്"],
+  ["cucumber", "veg", "വെള്ളരിക്ക"], ["drumstick", "veg", "മുരിങ്ങക്ക"], ["bitter gourd", "veg", "പാവയ്ക്ക"],
+  ["pumpkin", "veg", "മത്തങ്ങ"], ["beetroot", "veg", "ബീറ്റ്റൂട്ട്"], ["plantain", "veg", "പച്ചക്കായ"],
+  ["lemon", "veg", "നാരങ്ങ"], ["capsicum", "veg", "കാപ്സിക്കം"],
+  ["apple", "fruit", "ആപ്പിൾ"], ["orange", "fruit", "ഓറഞ്ച്"], ["mango", "fruit", "മാങ്ങ"],
+  ["banana", "fruit", "പഴം"], ["grape", "fruit", "മുന്തിരി"], ["watermelon", "fruit", "തണ്ണിമത്തൻ"],
+  ["papaya", "fruit", "പപ്പായ"], ["fruit", "fruit", "പഴങ്ങൾ"],
+  ["nurukku", "snacks", "നുറുക്ക്"], ["chips", "snacks", "ചിപ്സ്"], ["biscuit", "snacks", "ബിസ്കറ്റ്"],
+  ["mixture", "snacks", "മിക്സ്ചർ"], ["snack", "snacks", "സ്നാക്സ്"],
+];
+const ML_RE = /[ഀ-ൿ]/;
+
+function lookup(name) {
+  const n = name.toLowerCase();
+  for (const [k, g, ml] of DICT) if (n.includes(k)) return { g, ml };
+  return null;
+}
+function mlFor(name) {
+  const parts = name.split(/\s*(?:\band\b|&|\+|,)\s*/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    const hits = parts.map(lookup);
+    if (hits.every(Boolean)) return { g: hits[0].g, ml: hits.map(h => h.ml).join(", ") };
+  }
+  return lookup(name);
+}
+function parseList(text) {
+  const items = [], notes = [];
+  let n = 0;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.replace(/^\s*(?:[-*•·]|\d+[.)])\s*/, "").trim();
+    if (!line) continue;
+    const hasMl = ML_RE.test(line);
+    if (hasMl && line.length > 30) { notes.push(line); continue; }
+    let name = line, note = "", qty = "";
+    const m = line.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+    if (m) {
+      name = m[1];
+      const inner = m[2].trim();
+      if (/^\d+$/.test(inner)) qty = inner; else note = inner;
+    }
+    name = name.replace(/\.\s*and\b/i, " and").replace(/[.,;:\s]+$/, "").trim();
+    if (!name) continue;
+    // "Mint and coriander leaves" -> two items, when both halves are known groceries
+    const parts = hasMl ? [] : name.split(/\s+(?:and|&|\+)\s+/i).map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1 && parts.every(lookup)) {
+      for (const part of parts) {
+        const h = lookup(part), nm = part.charAt(0).toUpperCase() + part.slice(1);
+        items.push({ id: "i" + (n++), name: nm, note, qty, group: h.g, mln: h.ml, mlOnly: false });
+      }
+      continue;
+    }
+    const hit = hasMl ? null : mlFor(name);
+    items.push({ id: "i" + (n++), name, note, qty, group: hit ? hit.g : "other", mln: hasMl ? name : (hit ? hit.ml : ""), mlOnly: hasMl });
+  }
+  return { items, notes };
+}
+
+const DEFAULT_TEXT = `Chicken
+Jeerakashala rice (1 kg, loose)
+Vinegar (Lulu)
+Yogurt
+Milk (Almarai low fat)
+Eggs
+Bread
+Ginger
+Onion
+Shallots
+Tomato
+Potato
+Green chili
+Curry leaves
+Mint leaves
+Coriander leaves
+Spinach (3)
+Brinjal
+Coconut
+Apples
+Oranges
+Mango (1)
+Nurukku
+Potato chips`;
+
+function defaultList() {
+  const p = parseList(DEFAULT_TEXT);
+  const offer = [
+    ["Ivy gourd", "kovakka", "കോവയ്ക്ക"], ["Okra", "vendakka", "വെണ്ടക്ക"],
+    ["Beans", "", "ബീൻസ്"], ["Long beans", "achinga", "അച്ചിങ്ങ"],
+  ].map(([name, note, mln], i) => ({ id: "o" + i, name, note, qty: "", group: "offer", mln, mlOnly: false, noteIsName: true }));
+  return {
+    id: "sima-2026-10-24",
+    source: "From Sima · Sat 24 Oct",
+    items: p.items.concat(offer),
+    notes: [],
+    offerNote: "പച്ചക്കറികൾ ഓഫർ ഉണ്ടെങ്കിൽ അതുമാത്രം കുറച്ച് വീതം എടുക്കുക",
+  };
+}
+
+/* ================= storage ================= */
+const LIST_KEY = "grocery-list-v1", PICK_KEY = "grocery-picked-v1", LANG_KEY = "grocery-lang-v1", PREV_KEY = "grocery-prev-v1";
+function load(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } }
+function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function validList(l) { return l && Array.isArray(l.items) && l.items.length; }
+
+let LIST = load(LIST_KEY);
+if (!validList(LIST)) LIST = defaultList();
+let picked = [];
+const savedPick = load(PICK_KEY);
+if (savedPick && savedPick.listId === LIST.id && Array.isArray(savedPick.picked)) picked = savedPick.picked;
+let lang = load(LANG_KEY) === "en" ? "en" : "ml";
+
+let ALL = [], BY_ID = {}, REQUIRED = [];
+function index() {
+  ALL = LIST.items.slice().sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
+  BY_ID = Object.fromEntries(ALL.map(i => [i.id, i]));
+  REQUIRED = ALL.filter(i => i.group !== "offer").map(i => i.id);
+  picked = picked.filter(id => BY_ID[id]);
+}
+index();
+function savePicked() { store(PICK_KEY, { listId: LIST.id, picked }); }
+
+/* ================= text ================= */
+const STR = {
+  ml: {
+    touch: "ടച്ച്", head: "ഹെഡ്ഫോൺ", newList: "പുതിയ ലിസ്റ്റ്",
+    touchNote: "എടുത്ത സാധനത്തിൽ ടച്ച് ചെയ്യുക, അത് ലിസ്റ്റിൽ നിന്ന് മാറും. കേട്ട് ഷോപ്പ് ചെയ്യാൻ \"ഹെഡ്ഫോൺ\" അമർത്തുക.",
+    got: "കിട്ടി ✓", repeat: "വീണ്ടും", skip: "പിന്നെ", section: "ഈ ഭാഗം മുഴുവൻ",
+    allDone: "എല്ലാം കിട്ടി. ലിസ്റ്റ് തീർന്നു.", doneLabel: "എല്ലാം കിട്ടി", doneMsg: "എല്ലാം കിട്ടി. എല്ലാം ട്രോളിയിലുണ്ട്.",
+    clicks: ["വീണ്ടും കേൾക്കുക", "കിട്ടി, അടുത്തത്", "പിന്നെ എടുക്കാം"],
+    ready: "ഹെഡ്ഫോൺ ബട്ടൺ റെഡി", speaking: "വായിക്കുന്നു…", noButtons: "ഈ ബ്രൗസറിൽ ഹെഡ്ഫോൺ ബട്ടൺ പ്രവർത്തിക്കില്ല",
+    connecting: "ഹെഡ്ഫോൺ ബട്ടൺ കണക്ട് ചെയ്യുന്നു…",
+    press: { repeat: "1 ക്ലിക്ക്: വീണ്ടും വായിക്കുന്നു", got: "2 ക്ലിക്ക്: കിട്ടി", skip: "3 ക്ലിക്ക്: പിന്നത്തേക്ക് മാറ്റി" },
+    tip: "സ്ക്രീനിൽ ടച്ച് ചെയ്തും ഉപയോഗിക്കാം. ബട്ടൺ പ്രവർത്തിക്കുന്നില്ലെങ്കിൽ ഇയർബഡിന്റെ ആപ്പിൽ 1 ടാപ്പ് = Play/Pause, 2 ടാപ്പ് = Next track എന്ന് സെറ്റ് ചെയ്യുക.",
+    noButtonsHelp: "ഫോണിലെ Chrome-ൽ തുറന്നാൽ ഹെഡ്ഫോൺ ബട്ടൺ പ്രവർത്തിക്കും. അതുവരെ സ്ക്രീനിലെ ബട്ടണുകൾ ഉപയോഗിക്കാം.",
+    noTTS: "ഈ ബ്രൗസറിൽ വായിച്ചു കേൾപ്പിക്കാൻ പറ്റുന്നില്ല. ഫോണിലെ Chrome-ൽ തുറക്കുക.",
+    noMl: "ഫോണിൽ മലയാളം വോയ്സ് കണ്ടില്ല, അതിനാൽ English-ൽ വായിക്കുന്നു.",
+    lockTip: "ഫോൺ പോക്കറ്റിൽ ഇടുമ്പോൾ പവർ ബട്ടൺ അമർത്തി ലോക്ക് ചെയ്യരുത്. പകരം \"പോക്കറ്റ് മോഡ്\" അമർത്തുക: സ്ക്രീൻ കറുപ്പാകും, ടച്ച് പ്രവർത്തിക്കില്ല, ഹെഡ്ഫോൺ ബട്ടണും വായനയും തുടരും.",
+    pocket: "പോക്കറ്റ് മോഡ്",
+    pkTitle: "പോക്കറ്റ് മോഡ് · ഹെഡ്ഫോൺ ബട്ടൺ ഉപയോഗിക്കുക",
+    pkHint: "തിരികെ വരാൻ സ്ക്രീനിൽ 2 സെക്കൻഡ് അമർത്തിപ്പിടിക്കുക",
+    noWake: "ഈ രീതിയിൽ തുറന്നപ്പോൾ സ്ക്രീൻ ഓണായി നിർത്താൻ ഫോൺ അനുവദിച്ചില്ല, അതുകൊണ്ട് കുറച്ച് കഴിഞ്ഞ് ഫോൺ ലോക്ക് ആകും. ഫോണിന്റെ Settings → Display → Screen timeout 10 മിനിറ്റോ അതിൽ കൂടുതലോ ആക്കുക, അല്ലെങ്കിൽ ഈ പേജ് https ലിങ്കിൽ തുറക്കുക.",
+    lockedSilent: "ഫോൺ ലോക്ക് ആയിരുന്നപ്പോൾ ഈ ഫോൺ വായിച്ചില്ല. ബട്ടൺ അമർത്തിയത് ലിസ്റ്റിൽ മാർക്ക് ആയിട്ടുണ്ട്. ശബ്ദം വേണമെങ്കിൽ സ്ക്രീൻ ഓണാക്കി വെക്കുക (ഈ പേജ് തുറന്നിരിക്കുമ്പോൾ സ്ക്രീൻ ഓഫ് ആകില്ല).",
+    npTitle: "പുതിയ ലിസ്റ്റ്",
+    npDesc: "WhatsApp സ്ക്രീൻഷോട്ട്, എഴുതിയ ലിസ്റ്റിന്റെ ഫോട്ടോ, അല്ലെങ്കിൽ PDF തിരഞ്ഞെടുക്കുക. ലിസ്റ്റ് തനിയെ റെഡിയാകും.",
+    upload: "ഫോട്ടോ / PDF തിരഞ്ഞെടുക്കുക", or: "അല്ലെങ്കിൽ ടെക്സ്റ്റ് paste ചെയ്യുക, ഒരു വരിയിൽ ഒരു സാധനം",
+    make: "ലിസ്റ്റ് ഉണ്ടാക്കുക", cancel: "റദ്ദാക്കുക", stop: "നിർത്തുക",
+    readingAI: "ലിസ്റ്റ് വായിക്കുന്നു… ഒരു മിനിറ്റ് വരെ എടുത്തേക്കാം",
+    readingOCR: "ഫോട്ടോ വായിക്കുന്നു…", openingPdf: "PDF തുറക്കുന്നു…",
+    ready1: n => `പുതിയ ലിസ്റ്റ് റെഡി: ${n} സാധനങ്ങൾ`,
+    readyCheck: n => `ഫോട്ടോയിൽ നിന്ന് ${n} സാധനങ്ങൾ കിട്ടി. ഒന്ന് നോക്കി ഉറപ്പാക്കുക.`,
+    err: {
+      no_items: "ഇതിൽ ഷോപ്പിംഗ് ലിസ്റ്റ് കണ്ടില്ല. വേറെ ഫോട്ടോ നോക്കുക, അല്ലെങ്കിൽ ടെക്സ്റ്റ് paste ചെയ്യുക.",
+      badtype: "ഫോട്ടോ അല്ലെങ്കിൽ PDF മാത്രം തിരഞ്ഞെടുക്കുക.",
+      not_granted: "ഫോട്ടോ വായിക്കാൻ Claude-ന് അനുമതി കിട്ടിയില്ല. ടെക്സ്റ്റ് paste ചെയ്യാം.",
+      rate_limited: "ഇപ്പോൾ കുറേ തവണ ശ്രമിച്ചു. കുറച്ച് കഴിഞ്ഞ് വീണ്ടും നോക്കുക.",
+      session_expired: "Claude-ൽ വീണ്ടും sign in ചെയ്ത ശേഷം നോക്കുക.",
+      image_rejected: "ഈ ഫയൽ തുറക്കാൻ പറ്റിയില്ല. വേറെ ഫോട്ടോ നോക്കുക.",
+      no_ai_images: "ഇവിടെ ഫോട്ടോ വായിക്കാൻ പറ്റുന്നില്ല. ടെക്സ്റ്റ് paste ചെയ്യുക.",
+      script: "വായിക്കാനുള്ള ടൂൾ ലോഡ് ആയില്ല. ഇന്റർനെറ്റ് നോക്കി വീണ്ടും ശ്രമിക്കുക.",
+      general: "ലിസ്റ്റ് വായിക്കാൻ പറ്റിയില്ല. ഒന്നുകൂടി ശ്രമിക്കുക, അല്ലെങ്കിൽ ടെക്സ്റ്റ് paste ചെയ്യുക.",
+      empty_text: "ലിസ്റ്റ് കണ്ടില്ല. ഒരു വരിയിൽ ഒരു സാധനം എന്ന രീതിയിൽ paste ചെയ്യുക.",
+    },
+    removed: name => `${name} ലിസ്റ്റിൽ നിന്ന് മാറ്റി`,
+    picked: n => `ട്രോളിയിൽ (${n})`, pickedHint: "തിരികെ ലിസ്റ്റിൽ വേണമെങ്കിൽ ടച്ച് ചെയ്യുക.", putBack: "തിരികെ",
+    reset: "ഈ ലിസ്റ്റ് ആദ്യം മുതൽ", resetArm: "ഉറപ്പാണോ? വീണ്ടും ടച്ച് ചെയ്യുക", prev: "പഴയ ലിസ്റ്റിലേക്ക് മടങ്ങുക",
+    left: n => n ? `${n} ബാക്കി` : "കഴിഞ്ഞു", emptyList: "ലിസ്റ്റിൽ ഒന്നുമില്ല. \"പുതിയ ലിസ്റ്റ്\" അമർത്തി ചേർക്കുക.",
+    undo: "Undo", fromPhoto: "ഫോട്ടോയിൽ നിന്ന്", fromPdf: "PDF-ൽ നിന്ന്", pasted: "Paste ചെയ്തത്",
+    offerCallout: "ഓഫർ ഉണ്ടെങ്കിൽ മാത്രം, കുറച്ച് വീതം വാങ്ങുക.",
+  },
+  en: {
+    touch: "Touch", head: "Headphones", newList: "New list",
+    touchNote: "Tap an item once it's in the basket and it drops off the list. Tap \"Headphones\" to shop by listening.",
+    got: "Got it ✓", repeat: "Repeat", skip: "Later", section: "Whole section",
+    allDone: "That's everything. List done.", doneLabel: "All done", doneMsg: "All done. Everything's in the basket.",
+    clicks: ["Repeat", "Got it, next", "Later"],
+    ready: "Headphone button ready", speaking: "Reading…", noButtons: "Headphone button doesn't work in this browser",
+    connecting: "Connecting headphone button…",
+    press: { repeat: "1 click: reading again", got: "2 clicks: got it", skip: "3 clicks: moved to later" },
+    tip: "Touch works too. If the button does nothing, set 1 tap = Play/Pause and 2 taps = Next track in your earbuds' app.",
+    noButtonsHelp: "Open the page in Chrome on your phone for the headphone button. Until then, use the screen buttons.",
+    noTTS: "This browser can't read aloud. Open the page in Chrome on your phone.",
+    noMl: "",
+    lockTip: "Don't lock the phone with the power button when you pocket it. Tap \"Pocket mode\" instead: the screen goes black, touches are ignored, and the headphone button and reading keep working.",
+    pocket: "Pocket mode",
+    pkTitle: "Pocket mode · use the headphone button",
+    pkHint: "Press and hold the screen for 2 seconds to come back",
+    noWake: "Opened this way, the phone won't keep the screen on, so it will lock after a while. Set Settings → Display → Screen timeout to 10 minutes or more, or open this page from an https link.",
+    lockedSilent: "This phone didn't read aloud while locked. Your button presses were still marked on the list. For sound, keep the screen on (it stays on while this page is open).",
+    npTitle: "New list",
+    npDesc: "Pick a WhatsApp screenshot, a photo of a written list, or a PDF. The list is made for you.",
+    upload: "Choose photo / PDF", or: "or paste text, one item per line",
+    make: "Make the list", cancel: "Cancel", stop: "Stop",
+    readingAI: "Reading the list… this can take up to a minute",
+    readingOCR: "Reading the photo…", openingPdf: "Opening the PDF…",
+    ready1: n => `New list ready: ${n} items`,
+    readyCheck: n => `Found ${n} items in the photo. Give it a quick check.`,
+    err: {
+      no_items: "No shopping list found in that. Try another photo, or paste the text.",
+      badtype: "Choose a photo or a PDF.",
+      not_granted: "Claude wasn't allowed to read the photo. You can paste the text instead.",
+      rate_limited: "Too many tries just now. Try again in a little while.",
+      session_expired: "Sign in to Claude again, then try.",
+      image_rejected: "That file couldn't be opened. Try another photo.",
+      no_ai_images: "Photos can't be read here. Paste the text instead.",
+      script: "The reader didn't load. Check the internet and try again.",
+      general: "Couldn't read the list. Try once more, or paste the text.",
+      empty_text: "No items found. Put one item on each line.",
+    },
+    removed: name => `${name} removed`,
+    picked: n => `In the basket (${n})`, pickedHint: "Tap an item to put it back on the list.", putBack: "Put back",
+    reset: "Start this list again", resetArm: "Tap again to bring everything back", prev: "Go back to the previous list",
+    left: n => n ? `${n} left` : "Done", emptyList: "Nothing on the list. Tap \"New list\" to add one.",
+    undo: "Undo", fromPhoto: "From photo", fromPdf: "From PDF", pasted: "Pasted",
+    offerCallout: "Buy these only if they're on offer, and just a little of each.",
+  },
+};
+const T = () => STR[lang];
+
+/* ================= speech out ================= */
+const synth = ("speechSynthesis" in window) ? window.speechSynthesis : null;
+let voices = [];
+function loadVoices() { try { voices = synth ? (synth.getVoices() || []) : []; } catch (e) { voices = []; } }
+if (synth) { loadVoices(); try { synth.addEventListener("voiceschanged", () => { loadVoices(); renderVoice(); }); } catch (e) {} }
+function findVoice(l) {
+  if (!voices.length) return null;
+  if (l === "ml") return voices.find(v => /^ml/i.test(v.lang)) || null;
+  return voices.find(v => /^en[-_]IN/i.test(v.lang)) || voices.find(v => /^en/i.test(v.lang)) || null;
+}
+function mlMissing() { return lang === "ml" && voices.length > 0 && !findVoice("ml"); }
+function sayLang() { return mlMissing() ? "en" : lang; }
+
+let isSpeaking = false, speakToken = 0, speakFallback = null, keepUtter = [];
+let lockedSilent = false, lockedWorked = false;
+function speakParts(parts) {
+  parts = parts.filter(p => p && p.text);
+  const token = ++speakToken;
+  clearTimeout(speakFallback);
+  if (!synth || !parts.length) { isSpeaking = false; renderStatus(); return; }
+  isSpeaking = true; renderStatus();
+  const finish = () => {
+    if (token !== speakToken) return;
+    clearTimeout(speakFallback);
+    isSpeaking = false; renderStatus(); keepPlaying();
+  };
+  const chars = parts.reduce((a, p) => a + p.text.length, 0);
+  speakFallback = setTimeout(finish, 2000 + chars * 140);
+  // Some phones stay silent while locked; notice that so the page can say so when unlocked.
+  let started = false;
+  const hiddenAtStart = document.visibilityState === "hidden";
+  if (hiddenAtStart) setTimeout(() => { if (token === speakToken && !started && document.visibilityState === "hidden") lockedSilent = true; }, 3000);
+  try { synth.cancel(); } catch (e) {}
+  setTimeout(() => {
+    if (token !== speakToken) return;
+    keepUtter = [];
+    parts.forEach((p, i) => {
+      try {
+        const u = new SpeechSynthesisUtterance(p.text);
+        u.lang = p.l === "ml" ? "ml-IN" : "en-IN";
+        const v = findVoice(p.l); if (v) u.voice = v;
+        u.rate = 0.95;
+        if (i === 0) u.onstart = () => { started = true; if (hiddenAtStart) lockedWorked = true; };
+        if (i === parts.length - 1) { u.onend = finish; u.onerror = finish; }
+        keepUtter.push(u);
+        synth.speak(u);
+      } catch (e) { if (i === parts.length - 1) finish(); }
+    });
+  }, 60);
+}
+function groupName(g, L) { const m = GROUP_META[g]; return L === "ml" ? (m.mlSay || m.ml) : (m.enSay || m.en); }
+function itemParts(it, L) {
+  const P = [];
+  if (it.mlOnly) { P.push({ text: it.name, l: "ml" }); return P; }
+  if (L === "ml" && it.mln) P.push({ text: it.mln, l: "ml" });
+  else P.push({ text: it.name, l: "en" });
+  if (it.note && !(L === "ml" && it.noteIsName)) P.push({ text: it.note, l: ML_RE.test(it.note) ? "ml" : "en" });
+  if (it.qty) {
+    if (/^\d+$/.test(it.qty)) P.push({ text: L === "ml" ? `${it.qty} എണ്ണം` : `${it.qty} of them`, l: L });
+    else P.push({ text: it.qty, l: ML_RE.test(it.qty) ? "ml" : "en" });
+  }
+  return P;
+}
+
+/* ================= queue ================= */
+let voiceOn = false, skipped = [], lastGroup = null;
+function currentItem() {
+  const rem = ALL.filter(i => !picked.includes(i.id));
+  const main = rem.filter(i => !skipped.includes(i.id));
+  if (main.length) return main[0];
+  return skipped.map(id => BY_ID[id]).find(i => i && !picked.includes(i.id)) || null;
+}
+function speakCurrent(withSection) {
+  const it = currentItem(), L = sayLang();
+  if (!it) { lastGroup = null; speakParts([{ text: STR[L].allDone, l: L }]); return; }
+  const parts = [];
+  if (withSection || it.group !== lastGroup) parts.push({ text: groupName(it.group, L), l: L });
+  lastGroup = it.group;
+  speakParts(parts.concat(itemParts(it, L)));
+}
+function speakSection() {
+  const it = currentItem(); if (!it) { speakCurrent(); return; }
+  const L = sayLang();
+  const left = ALL.filter(i => i.group === it.group && !picked.includes(i.id));
+  lastGroup = it.group;
+  speakParts([{ text: groupName(it.group, L), l: L }].concat(...left.map(i => itemParts(i, L))));
+}
+function pick(id, fromVoice) {
+  if (picked.includes(id)) return;
+  const cur = currentItem();
+  const wasCurrent = cur && cur.id === id;
+  picked.push(id);
+  skipped = skipped.filter(x => x !== id);
+  savePicked(); render();
+  showToast(T().removed(BY_ID[id].name), () => {
+    picked = picked.filter(x => x !== id);
+    savePicked(); render(); if (voiceOn) speakCurrent(false);
+  });
+  if (voiceOn && (fromVoice || wasCurrent)) speakCurrent(false);
+}
+function gotIt() { const it = currentItem(); if (it) pick(it.id, true); }
+function skipIt() {
+  const it = currentItem(); if (!it) return;
+  skipped = skipped.filter(x => x !== it.id); skipped.push(it.id);
+  render(); if (voiceOn) speakCurrent(false);
+}
+
+/* ================= headphone buttons =================
+   Headsets send media keys: 1 press = play/pause, 2 presses = next track, 3 presses = previous track.
+   A silent looping track makes this page the phone's active media player so those keys reach it. */
+let silent = null, buttonsState = "idle", pressTimer = null;
+function silentWavUrl() {
+  const rate = 8000, secs = 10, n = rate * secs;
+  const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  w(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+function keepPlaying() {
+  if (!voiceOn || !silent || isSpeaking) return;
+  try { const q = silent.play(); if (q && q.catch) q.catch(() => {}); } catch (e) {}
+  try { navigator.mediaSession.playbackState = "playing"; } catch (e) {}
+}
+function startButtons() {
+  if (!("mediaSession" in navigator)) { buttonsState = "none"; return; }
+  buttonsState = "connecting";
+  try {
+    if (!silent) {
+      silent = new Audio(silentWavUrl());
+      silent.loop = true;
+      silent.addEventListener("pause", () => { if (voiceOn) setTimeout(keepPlaying, 400); });
+    }
+    const h = (action, kind) => {
+      try { navigator.mediaSession.setActionHandler(action, () => { onPress(kind); setTimeout(keepPlaying, 50); }); } catch (e) {}
+    };
+    h("play", "repeat");
+    h("pause", "repeat");
+    h("nexttrack", "got");
+    h("previoustrack", "skip");
+    const p = silent.play();
+    const ok = () => { buttonsState = "ready"; try { navigator.mediaSession.playbackState = "playing"; } catch (e) {} updateMeta(); renderStatus(); };
+    if (p && p.then) p.then(ok).catch(() => { buttonsState = "none"; renderStatus(); }); else ok();
+  } catch (e) { buttonsState = "none"; }
+}
+function stopButtons() {
+  try { if (silent) silent.pause(); } catch (e) {}
+  ["play", "pause", "nexttrack", "previoustrack"].forEach(a => { try { navigator.mediaSession.setActionHandler(a, null); } catch (e) {} });
+  try { navigator.mediaSession.playbackState = "none"; navigator.mediaSession.metadata = null; } catch (e) {}
+  buttonsState = "idle";
+}
+function onPress(kind) {
+  if (!voiceOn) return;
+  const p = $("press");
+  p.textContent = T().press[kind];
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { p.textContent = ""; }, 3000);
+  if (kind === "repeat") speakCurrent(false);
+  else if (kind === "got") gotIt();
+  else skipIt();
+}
+// The phone's media notification / lock screen shows the current item.
+function updateMeta() {
+  if (!voiceOn || !("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
+  const it = currentItem();
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: it ? (lang === "ml" && it.mln ? it.mln : it.name) : T().doneLabel,
+      artist: it ? GROUP_META[it.group][lang] : "",
+      album: "Grocery list",
+    });
+  } catch (e) {}
+}
+
+/* ================= screen on ================= */
+// Keeping the screen on only works on an https page; a downloaded file opened from the phone's storage is refused.
+let wakeLock = null, wakeFailed = false;
+async function lockScreen() {
+  if (!("wakeLock" in navigator) || window.isSecureContext === false) { wakeFailed = true; renderStatus(); renderPocket(); return; }
+  try { wakeLock = await navigator.wakeLock.request("screen"); wakeFailed = false; }
+  catch (e) { wakeLock = null; if (document.visibilityState === "visible") wakeFailed = true; }
+  renderStatus(); renderPocket();
+}
+
+/* ================= pocket mode ================= */
+let pocketOn = false, holdStart = 0, holdRaf = null;
+const HOLD_MS = 2000;
+function enterPocket() {
+  if (!voiceOn) return;
+  pocketOn = true; $("pocket").hidden = false; renderPocket();
+  try { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); } catch (e) {}
+  lockScreen();
+}
+function exitPocket() {
+  if (!pocketOn) return;
+  pocketOn = false; $("pocket").hidden = true; cancelHold();
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); } catch (e) {}
+}
+function renderPocket() {
+  if (!pocketOn) return;
+  const t = T(), it = currentItem();
+  $("pkTitle").textContent = t.pkTitle;
+  $("pkItem").textContent = it ? (lang === "ml" && it.mln ? it.mln : it.name) : t.doneLabel;
+  $("pkHint").textContent = t.pkHint;
+  $("pkWarn").textContent = t.noWake;
+  $("pkWarn").hidden = !wakeFailed;
+}
+function cancelHold() { holdStart = 0; if (holdRaf) cancelAnimationFrame(holdRaf); holdRaf = null; $("pkBar").style.width = "0"; }
+function holdTick() {
+  if (!holdStart) return;
+  const f = Math.min(1, (performance.now() - holdStart) / HOLD_MS);
+  $("pkBar").style.width = (f * 100) + "%";
+  if (f >= 1) { cancelHold(); exitPocket(); return; }
+  holdRaf = requestAnimationFrame(holdTick);
+}
+// Locking the phone hides the page but does not stop it: the silent track keeps it running,
+// headphone buttons and the lock-screen media controls keep working, and reading continues where the phone allows.
+document.addEventListener("visibilitychange", () => {
+  if (!voiceOn) return;
+  if (document.visibilityState === "visible") { lockScreen(); keepPlaying(); renderStatus(); }
+  else keepPlaying();
+});
+
+/* ================= modes ================= */
+function startVoice() {
+  if (voiceOn) return;
+  voiceOn = true; lastGroup = null;
+  lockScreen(); startButtons(); render(); speakCurrent(true);
+}
+function stopVoice() {
+  if (!voiceOn) return;
+  voiceOn = false;
+  try { if (synth) synth.cancel(); } catch (e) {}
+  isSpeaking = false; speakToken++;
+  exitPocket();
+  stopButtons();
+  try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  wakeLock = null; $("press").textContent = ""; render();
+}
+
+/* ================= new list: photo / PDF / paste ================= */
+const PDF_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFW_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const TESS_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+const scripts = {};
+function loadScript(src) {
+  if (!scripts[src]) scripts[src] = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.async = true;
+    s.onload = res;
+    s.onerror = () => { delete scripts[src]; rej({ code: "script" }); };
+    document.head.appendChild(s);
+  });
+  return scripts[src];
+}
+
+// Inside Claude, the page can ask Claude to read photos. Elsewhere it reads them on the phone (OCR).
+const inClaude = !!(window.claude && typeof window.claude.use === "function");
+let samplePromise = null;
+function getSample() {
+  if (!samplePromise) samplePromise = inClaude ? window.claude.use("sample").catch(() => null) : Promise.resolve(null);
+  return samplePromise;
+}
+getSample();
+
+const AI_PROMPT = `You turn a shopping list into JSON for a grocery checklist app used by a Malayali family in Bahrain.
+The input is a photo (often a WhatsApp screenshot or a handwritten note) or text. Ignore everything that is not part of the shopping list: times, names, app buttons, links, status bar, unrelated earlier messages.
+Reply with only this JSON:
+{"items":[{"name":"","note":"","qty":"","group":"","ml":""}],"offer":{"note":"","items":[]},"notes":[]}
+- name: the item in plain English, as the sender meant it (e.g. "Jeerakashala rice", "Curry leaves").
+- note: brand, store or detail the sender gave (e.g. "Almarai low fat", "Lulu", "loose"); else "".
+- qty: amount if given (e.g. "3", "1 kg"); else "".
+- group: one of meat (meat, fish, eggs), dairy (milk, yogurt, cheese, bread), pantry (rice, flour, oil, spices, vinegar, packets), veg (vegetables, coconut), herbs (curry leaves, mint, coriander leaves), fruit, snacks, other.
+- ml: the item's everyday Kerala name in Malayalam script (e.g. Onion -> "സവാള", Shallots -> "ചെറിയ ഉള്ളി").
+- One entry per thing to buy: split "Mint and coriander leaves" into two items, "Fruits (apple and orange)" into Apples and Oranges.
+- If the sender says some items should be bought only if on offer, put those items in offer.items (same fields, any group) and the sender's original sentence in offer.note.
+- Other instructions from the sender go in notes, in the sender's original words. Items written in Malayalam still get an English name.
+Example item: {"name":"Spinach","note":"","qty":"3","group":"veg","ml":"ചീര"}`;
+
+let importCtl = null, importing = false;
+function setImporting(text) {
+  importing = !!text;
+  $("importing").hidden = !text;
+  $("importText").textContent = text || "";
+  $("uploadLabel").classList.toggle("busy", importing);
+  $("makeBtn").disabled = importing;
+  $("fileInput").disabled = importing;
+}
+function showImportError(code) {
+  const e = $("importErr");
+  e.textContent = T().err[code] || T().err.general;
+  e.hidden = false;
+}
+
+function cleanAI(d) {
+  const groups = new Set(GROUP_ORDER.filter(g => g !== "offer"));
+  const clean = (x, forceGroup) => {
+    if (!x || typeof x !== "object") return null;
+    const name = String(x.name || "").trim().slice(0, 80);
+    if (!name) return null;
+    const g = forceGroup || (groups.has(x.group) ? x.group : "other");
+    return { name, note: String(x.note || "").trim().slice(0, 80), qty: String(x.qty || "").trim().slice(0, 20), group: g, mln: String(x.ml || "").trim().slice(0, 60), mlOnly: false };
+  };
+  const items = (Array.isArray(d && d.items) ? d.items : []).map(x => clean(x)).filter(Boolean);
+  const offerItems = (Array.isArray(d && d.offer && d.offer.items) ? d.offer.items : []).map(x => clean(x, "offer")).filter(Boolean);
+  const notes = (Array.isArray(d && d.notes) ? d.notes : []).map(s => String(s).trim()).filter(Boolean).slice(0, 5);
+  if (!items.length && !offerItems.length) throw { code: "no_items" };
+  return { items: items.concat(offerItems), notes, offerNote: offerItems.length ? String((d.offer && d.offer.note) || "").trim() : "" };
+}
+async function toAccepted(blob, types, maxBytes) {
+  if (types.includes(blob.type) && blob.size <= maxBytes) return blob;
+  const bmp = await createImageBitmap(blob);
+  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
+}
+async function aiFromImages(sample, blobs) {
+  const lim = await sample.limits().catch(() => null);
+  if (!lim || !lim.images) throw { code: "no_ai_images" };
+  const imgs = [];
+  for (const b of blobs.slice(0, lim.images.maxCount)) imgs.push(await toAccepted(b, lim.images.mediaTypes, lim.images.maxInputBytes));
+  importCtl = new AbortController();
+  setImporting(T().readingAI);
+  const data = await sample.json(AI_PROMPT + "\n\nThe shopping list is in the attached image(s).", { images: imgs, signal: importCtl.signal });
+  return cleanAI(data);
+}
+async function aiFromText(sample, text) {
+  importCtl = new AbortController();
+  setImporting(T().readingAI);
+  const data = await sample.json(AI_PROMPT + "\n\nThe shopping list text:\n\n" + text.slice(0, 20000), { signal: importCtl.signal });
+  return cleanAI(data);
+}
+function cleanOcr(text) {
+  return text.split(/\r?\n/)
+    .map(l => l.replace(/\s*\d{1,2}[:.]\d{2}\s*(?:[AP]M)?\s*$/i, "").replace(/[|_~=<>«»©®]+/g, " ").replace(/\s{2,}/g, " ").trim())
+    .filter(l => l.length >= 2 && /[A-Za-zഀ-ൿ]{2,}/.test(l))
+    .filter(l => !/^\d{1,2}[:.]\d{2}\b/.test(l))
+    .filter(l => !/(unread message|^today$|^yesterday$|^message$|\blte\b|\b[45]g\b|https?:|www\.|facebook|office use|^online$|last seen)/i.test(l))
+    .join("\n");
+}
+async function ocrImages(blobs) {
+  setImporting(T().readingOCR);
+  await loadScript(TESS_URL);
+  const worker = await window.Tesseract.createWorker(["eng", "mal"], 1, {
+    logger: m => { if (m && m.status === "recognizing text") setImporting(`${T().readingOCR} ${Math.round((m.progress || 0) * 100)}%`); },
+  });
+  let text = "";
+  try { for (const b of blobs) { const { data } = await worker.recognize(b); text += data.text + "\n"; } }
+  finally { try { await worker.terminate(); } catch (e) {} }
+  const p = parseList(cleanOcr(text));
+  if (!p.items.length) throw { code: "no_items" };
+  return { items: p.items, notes: p.notes, offerNote: "", needsCheck: true };
+}
+async function renderPdfPage(pdf, n) {
+  const page = await pdf.getPage(n);
+  const vp = page.getViewport({ scale: 1.6 });
+  const c = document.createElement("canvas");
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+  return await new Promise(r => c.toBlob(r, "image/png"));
+}
+async function importPdf(file) {
+  setImporting(T().openingPdf);
+  await loadScript(PDF_URL);
+  await loadScript(PDFW_URL);
+  const lib = window.pdfjsLib;
+  lib.GlobalWorkerOptions.workerSrc = PDFW_URL;
+  const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = Math.min(pdf.numPages, 4);
+  let text = "";
+  for (let p = 1; p <= pages; p++) {
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    text += tc.items.map(i => (i.str || "") + (i.hasEOL ? "\n" : "")).join("") + "\n";
+  }
+  const sample = await getSample();
+  if (text.replace(/\s/g, "").length >= 6) {
+    if (sample) return await aiFromText(sample, text);
+    const p = parseList(text);
+    if (!p.items.length) throw { code: "no_items" };
+    return { items: p.items, notes: p.notes, offerNote: "" };
+  }
+  const imgs = [];
+  for (let p = 1; p <= Math.min(pages, 3); p++) imgs.push(await renderPdfPage(pdf, p));
+  if (sample) return await aiFromImages(sample, imgs);
+  if (inClaude) throw { code: "no_ai_images" };
+  return await ocrImages(imgs);
+}
+async function importImages(files) {
+  const sample = await getSample();
+  if (sample) return await aiFromImages(sample, files);
+  if (inClaude) throw { code: "no_ai_images" };
+  return await ocrImages(files);
+}
+async function importFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length || importing) return;
+  $("importErr").hidden = true;
+  const isPdf = f => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+  const isImg = f => (f.type || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(f.name);
+  try {
+    let result, how;
+    const pdfFile = files.find(isPdf);
+    if (pdfFile) { result = await importPdf(pdfFile); how = T().fromPdf; }
+    else {
+      const imgs = files.filter(isImg);
+      if (!imgs.length) throw { code: "badtype" };
+      result = await importImages(imgs); how = T().fromPhoto;
+    }
+    applyNewList(result, how);
+  } catch (e) {
+    const code = e && e.code;
+    if (code !== "cancelled") showImportError(code);
+  } finally {
+    setImporting("");
+    importCtl = null;
+    $("fileInput").value = "";
+  }
+}
+function applyNewList(r, how) {
+  store(PREV_KEY, { list: LIST, picked });
+  const d = new Date();
+  LIST = {
+    id: "p" + d.getTime(),
+    source: `${how} · ${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`,
+    items: r.items.map((x, i) => ({ ...x, id: "i" + i })),
+    notes: r.notes || [], offerNote: r.offerNote || "",
+  };
+  store(LIST_KEY, LIST);
+  picked = []; skipped = []; lastGroup = null; index(); savePicked();
+  $("newText").value = ""; $("newPanel").hidden = true;
+  render(); window.scrollTo({ top: 0 });
+  const n = LIST.items.length;
+  showToast(r.needsCheck ? T().readyCheck(n) : T().ready1(n), restorePrev, 8000);
+  if (voiceOn) speakCurrent(true);
+}
+function restorePrev() {
+  const prev = load(PREV_KEY);
+  if (!prev || !validList(prev.list)) return;
+  store(PREV_KEY, { list: LIST, picked });
+  LIST = prev.list; picked = Array.isArray(prev.picked) ? prev.picked : [];
+  store(LIST_KEY, LIST); skipped = []; lastGroup = null; index(); savePicked();
+  hideToast(); render(); window.scrollTo({ top: 0 });
+  if (voiceOn) speakCurrent(true);
+}
+
+/* ================= render ================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const qtyLabel = q => /^\d+$/.test(q) ? `× ${q}` : q;
+const rowInner = it => `
+  <span class="label">
+    <span class="name">${esc(it.name)}</span>
+    ${it.note ? `<span class="note">${esc(it.note)}</span>` : ""}
+  </span>
+  ${it.qty ? `<span class="qty">${esc(qtyLabel(it.qty))}</span>` : ""}`;
+
+function renderStatus() {
+  if (!voiceOn) return;
+  const t = T(), s = $("status"), txt = $("statusText");
+  s.className = "status";
+  if (isSpeaking) { s.classList.add("speaking"); txt.textContent = t.speaking; }
+  else if (buttonsState === "ready") { s.classList.add("ready"); txt.textContent = t.ready; }
+  else if (buttonsState === "connecting") { txt.textContent = t.connecting; }
+  else { s.classList.add("off"); txt.textContent = t.noButtons; }
+  const notes = []; let warn = false;
+  if (wakeFailed) { notes.push(t.noWake); warn = true; }
+  if (!synth) { notes.push(t.noTTS); warn = true; }
+  if (mlMissing()) { notes.push(STR.ml.noMl); warn = true; }
+  if (buttonsState === "none") { notes.push(t.noButtonsHelp); warn = true; } else notes.push(t.tip);
+  if (lockedSilent && !lockedWorked) { notes.push(t.lockedSilent); warn = true; }
+  else if (buttonsState === "ready") notes.push(t.lockTip);
+  const n = $("onNote"); n.textContent = notes.join(" "); n.classList.toggle("warn", warn);
+}
+function renderVoice() {
+  const t = T();
+  $("modeTouch").setAttribute("aria-pressed", String(!voiceOn));
+  $("modeHead").setAttribute("aria-pressed", String(voiceOn));
+  $("modeTouchLabel").textContent = t.touch;
+  $("modeHeadLabel").textContent = t.head;
+  $("newBtnLabel").textContent = t.newList;
+  $("touchNote").textContent = t.touchNote;
+  $("touchNote").hidden = voiceOn;
+  $("langMl").setAttribute("aria-pressed", String(lang === "ml"));
+  $("langEn").setAttribute("aria-pressed", String(lang === "en"));
+  $("gotBtn").textContent = t.got;
+  $("repeatBtn").textContent = t.repeat;
+  $("skipBtn").textContent = t.skip;
+  $("sectionBtn").textContent = t.section;
+  $("pocketBtn").textContent = t.pocket;
+  renderPocket();
+  $("clicksOn").innerHTML = t.clicks.map((label, i) =>
+    `<div class="click"><span class="n" aria-label="${i + 1}">${"<i></i>".repeat(i + 1)}</span><b>${esc(label)}</b></div>`).join("");
+  $("voiceOn").hidden = !voiceOn;
+
+  $("npTitle").textContent = t.npTitle; $("npDesc").textContent = t.npDesc;
+  $("uploadText").textContent = t.upload; $("npOr").textContent = t.or;
+  $("makeBtn").textContent = t.make; $("cancelBtn").textContent = t.cancel; $("importStop").textContent = t.stop;
+
+  const it = currentItem(), sec = $("nowSec");
+  ["gotBtn", "repeatBtn", "skipBtn", "sectionBtn"].forEach(id => $(id).disabled = !it);
+  if (!it) {
+    sec.textContent = ""; sec.classList.remove("is-offer");
+    $("nowItem").textContent = t.doneLabel; $("nowEn").textContent = "";
+  } else {
+    sec.textContent = GROUP_META[it.group][lang];
+    sec.classList.toggle("is-offer", it.group === "offer");
+    const q = it.qty ? qtyLabel(it.qty) : "";
+    if (lang === "ml" && it.mln) {
+      $("nowItem").textContent = it.mln;
+      $("nowEn").textContent = it.mlOnly ? "" : [it.name, it.note, q].filter(Boolean).join(" · ");
+    } else {
+      $("nowItem").textContent = it.name;
+      $("nowEn").textContent = [it.note, q, it.mlOnly ? "" : it.mln].filter(Boolean).join(" · ");
+    }
+  }
+  renderStatus(); updateMeta();
+}
+
+function render() {
+  const t = T(), isPicked = id => picked.includes(id);
+  const cur = voiceOn ? currentItem() : null;
+  $("sub").textContent = LIST.source || "";
+
+  const notesBox = $("notes");
+  notesBox.hidden = !(LIST.notes && LIST.notes.length);
+  notesBox.innerHTML = (LIST.notes || []).map(n => `<p${ML_RE.test(n) ? ' lang="ml"' : ""}>${esc(n)}</p>`).join("");
+
+  const html = GROUP_ORDER.map(g => {
+    const left = ALL.filter(i => i.group === g && !isPicked(i.id));
+    if (!left.length) return "";
+    const callout = g === "offer" ? `
+      <div class="callout">
+        <p>${esc(t.offerCallout)}</p>
+        ${LIST.offerNote ? `<p class="orig"${ML_RE.test(LIST.offerNote) ? ' lang="ml"' : ""}>${esc(LIST.offerNote)}</p>` : ""}
+      </div>` : "";
+    return `<section class="${g === "offer" ? "offer" : ""}">
+      <h2>${esc(GROUP_META[g][lang])}</h2>${callout}
+      <ul>${left.map(it => `<li class="${cur && cur.id === it.id ? "current" : ""}"><button type="button" class="item" id="item-${it.id}" data-id="${it.id}"><span class="dot"></span>${rowInner(it)}</button></li>`).join("")}</ul>
+    </section>`;
+  }).join("");
+  $("list").innerHTML = ALL.length ? html : `<p class="empty">${esc(t.emptyList)}</p>`;
+
+  const got = REQUIRED.filter(isPicked).length, rem = REQUIRED.length - got;
+  $("left").textContent = t.left(rem);
+  $("bar").style.width = (REQUIRED.length ? got / REQUIRED.length * 100 : 0) + "%";
+  $("doneMsg").textContent = t.doneMsg;
+  $("doneMsg").hidden = rem !== 0 || !REQUIRED.length;
+
+  $("picked").hidden = picked.length === 0;
+  $("pickedSum").textContent = t.picked(picked.length);
+  $("pickedHint").textContent = t.pickedHint;
+  $("pickedList").innerHTML = [...picked].reverse().map(id => {
+    const it = BY_ID[id];
+    return `<li><button type="button" class="item" id="back-${id}" data-back="${id}">${rowInner(it)}<span class="back">${esc(t.putBack)}</span></button></li>`;
+  }).join("");
+
+  if (!armed) $("resetBtn").textContent = t.reset;
+  const prev = load(PREV_KEY);
+  $("prevBtn").hidden = !(prev && validList(prev.list));
+  $("prevBtn").textContent = t.prev;
+
+  renderVoice();
+}
+
+/* ================= toast ================= */
+let toastUndo = null, toastTimer = null;
+function showToast(text, onUndo, ms) {
+  toastUndo = onUndo || null;
+  $("toastText").textContent = text;
+  $("undoBtn").textContent = T().undo;
+  $("undoBtn").hidden = !onUndo;
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, ms || 4500);
+}
+function hideToast() { $("toast").hidden = true; toastUndo = null; clearTimeout(toastTimer); }
+
+/* ================= events ================= */
+let armed = null;
+const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+$("list").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-id]"); if (!btn) return;
+  const id = btn.dataset.id; if (picked.includes(id)) return;
+  if (reduceMotion) pick(id, false);
+  else { btn.closest("li").classList.add("leaving"); setTimeout(() => pick(id, false), 200); }
+});
+$("pickedList").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-back]"); if (!btn) return;
+  picked = picked.filter(id => id !== btn.dataset.back);
+  savePicked(); render(); if (voiceOn) speakCurrent(false);
+});
+$("undoBtn").addEventListener("click", () => { const f = toastUndo; hideToast(); if (f) f(); });
+$("modeTouch").addEventListener("click", stopVoice);
+$("modeHead").addEventListener("click", startVoice);
+$("gotBtn").addEventListener("click", gotIt);
+$("repeatBtn").addEventListener("click", () => speakCurrent(false));
+$("skipBtn").addEventListener("click", skipIt);
+$("sectionBtn").addEventListener("click", speakSection);
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  lang = b.dataset.lang; store(LANG_KEY, lang);
+  render();
+  if (voiceOn) speakCurrent(true);
+}));
+
+const resetBtn = $("resetBtn");
+function disarm() { clearTimeout(armed); armed = null; resetBtn.textContent = T().reset; resetBtn.classList.remove("warn"); }
+resetBtn.addEventListener("click", () => {
+  if (!armed) { resetBtn.textContent = T().resetArm; resetBtn.classList.add("warn"); armed = setTimeout(disarm, 3000); return; }
+  disarm(); picked = []; skipped = []; savePicked(); render(); window.scrollTo({ top: 0 });
+  if (voiceOn) speakCurrent(true);
+});
+$("prevBtn").addEventListener("click", restorePrev);
+
+$("pocketBtn").addEventListener("click", enterPocket);
+const pocketEl = $("pocket");
+pocketEl.addEventListener("pointerdown", e => { e.preventDefault(); holdStart = performance.now(); holdRaf = requestAnimationFrame(holdTick); });
+["pointerup", "pointercancel", "pointerleave"].forEach(ev => pocketEl.addEventListener(ev, cancelHold));
+pocketEl.addEventListener("contextmenu", e => e.preventDefault());
+pocketEl.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); });
+
+$("newBtn").addEventListener("click", () => {
+  const p = $("newPanel");
+  p.hidden = !p.hidden;
+  $("importErr").hidden = true;
+  if (!p.hidden) p.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+});
+$("cancelBtn").addEventListener("click", () => { if (importCtl) importCtl.abort(); $("newPanel").hidden = true; });
+$("importStop").addEventListener("click", () => { if (importCtl) importCtl.abort(); });
+$("fileInput").addEventListener("change", e => importFiles(e.target.files));
+$("makeBtn").addEventListener("click", () => {
+  $("importErr").hidden = true;
+  const p = parseList($("newText").value);
+  if (!p.items.length) { showImportError("empty_text"); return; }
+  applyNewList({ items: p.items, notes: p.notes, offerNote: "" }, T().pasted);
+});
+
+render();
+</script>
+</body>
+</html>
